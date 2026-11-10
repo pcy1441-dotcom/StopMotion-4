@@ -1,0 +1,534 @@
+
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>StopMotion Studio</title>
+<style>
+:root{color-scheme:dark;--bg:#10131a;--panel:#191e29;--panel2:#222938;--line:#30394b;--text:#f3f5fa;--muted:#a5afc1;--accent:#8c9eff;--accent2:#b6c1ff}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--text);font:15px/1.5 system-ui,-apple-system,"Noto Sans KR",sans-serif}
+button,input,select{font:inherit}
+button{cursor:pointer;border:1px solid var(--line);background:var(--panel2);color:var(--text);border-radius:10px;padding:10px 14px}
+button:hover{border-color:var(--accent)}
+button:disabled{opacity:.45;cursor:not-allowed}
+.app{max-width:1180px;margin:auto;padding:24px}
+header{display:flex;align-items:center;justify-content:space-between;gap:16px;margin-bottom:20px}
+h1{font-size:24px;margin:0;letter-spacing:-.5px}
+.sub{color:var(--muted);font-size:13px;margin-top:3px}
+.pill{font-size:12px;color:#c6ceff;border:1px solid #4a5681;background:#242c46;padding:5px 9px;border-radius:999px}
+.layout{display:grid;grid-template-columns:minmax(0,1.5fr) minmax(280px,.8fr);gap:18px}
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:16px;min-width:0}
+.panel h2{font-size:16px;margin:0 0 12px}
+.preview{background:#090b10;border-radius:12px;min-height:300px;display:flex;align-items:center;justify-content:center;overflow:hidden;position:relative}
+canvas{display:block;max-width:100%;max-height:520px;object-fit:contain}
+.empty{
+ color:var(--muted);
+ position:absolute;
+ inset:0;
+ display:flex;
+ align-items:center;
+ justify-content:center;
+ width:100%;
+ height:100%;
+ padding:24px;
+ text-align:center;
+ writing-mode:horizontal-tb;
+ word-break:keep-all;
+ overflow-wrap:break-word;
+ white-space:normal;
+ margin:auto;
+}
+.controls{display:flex;align-items:center;justify-content:center;gap:9px;margin-top:12px;flex-wrap:wrap}
+.primary{background:#6678e8;border-color:#6678e8;color:white;font-weight:650}
+.primary:hover{background:#7888f0}
+.danger{color:#ffb4b4}
+.row{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.between{justify-content:space-between}
+.small{font-size:12px;color:var(--muted)}
+.settings{display:grid;gap:14px}
+.field{display:grid;gap:6px}
+label{font-size:13px;color:#cbd2e0}
+select,input[type=number]{width:100%;background:#111722;color:var(--text);border:1px solid var(--line);border-radius:9px;padding:10px}
+.dimensions{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+input[type=file]{display:none}
+.upload{display:block;width:100%;text-align:center;padding:18px;border:1px dashed #596684;border-radius:12px;background:#151b27;color:#dce2ff;cursor:pointer}
+.upload:hover{border-color:var(--accent)}
+.timeline{display:flex;gap:9px;overflow-x:auto;padding:12px 2px 4px;min-height:108px}
+.frame{width:88px;flex:0 0 88px;border:2px solid transparent;border-radius:10px;padding:4px;background:#111722;cursor:grab;position:relative}
+.frame.active{border-color:var(--accent)}
+.frame img{width:100%;height:64px;object-fit:contain;background:#090b10;border-radius:5px}
+.frame .num{font-size:11px;color:var(--muted);text-align:center}
+.frame .remove{position:absolute;right:4px;top:4px;border:0;background:#111d;padding:1px 6px;border-radius:6px;color:white}
+.progress{height:7px;background:#30394b;border-radius:9px;overflow:hidden;margin-top:10px}
+.progress>div{height:100%;width:0;background:var(--accent);transition:width .15s}
+.status{font-size:12px;color:var(--muted);margin-top:8px;min-height:18px}
+footer{color:var(--muted);font-size:12px;margin-top:18px}
+@media(max-width:800px){
+ .layout{grid-template-columns:1fr}
+ .app{padding:14px}
+ .preview{min-height:220px}
+}
+</style>
+</head>
+<body>
+<div class="app">
+<header>
+ <div>
+  <h1>🎞️ StopMotion Studio</h1>
+  <div class="sub">사진을 순서대로 배치하고 스톱모션 영상으로 내보내세요.</div>
+ </div>
+ <span class="pill">브라우저에서 실행</span>
+</header>
+
+<div class="layout">
+<section class="panel">
+ <h2>미리보기</h2>
+ <div class="preview" id="previewArea">
+  <div class="empty" id="empty">사진을 추가하면 미리보기가 여기에 표시됩니다.</div>
+  <canvas id="previewCanvas" hidden></canvas>
+ </div>
+
+ <div class="controls">
+  <button id="firstBtn" title="처음">⏮</button>
+  <button id="playBtn" class="primary">▶ 재생</button>
+  <button id="pauseBtn" disabled>⏸ 정지</button>
+  <button id="nextBtn" title="다음">⏭</button>
+ </div>
+
+ <div class="row between" style="margin-top:18px">
+  <h2 style="margin:0">프레임 타임라인</h2>
+  <span class="small" id="count">0장</span>
+ </div>
+
+ <div class="timeline" id="timeline"></div>
+
+ <div class="row between">
+  <span class="small">사진을 드래그해 순서를 바꿀 수 있어요.</span>
+  <button id="clearBtn" class="danger">전체 삭제</button>
+ </div>
+</section>
+
+<aside class="panel">
+ <h2>프로젝트 설정</h2>
+ <div class="settings">
+  <button type="button" id="addPhotosBtn" class="upload">
+   ＋ 사진 추가하기<br>
+   <span class="small">여러 장을 한 번에 선택할 수 있어요.</span>
+  </button>
+
+  <input id="fileInput" type="file" accept="image/*" multiple style="position:absolute;width:1px;height:1px;opacity:0;pointer-events:none">
+
+  <div class="field">
+   <label for="orientation">영상 방향</label>
+   <select id="orientation">
+    <option value="landscape">가로형 (16:9)</option>
+    <option value="portrait">세로형 (9:16)</option>
+    <option value="custom">직접 설정</option>
+   </select>
+  </div>
+
+  <div id="customBox" class="field" hidden>
+   <label>사용자 지정 해상도 (픽셀)</label>
+   <div class="dimensions">
+    <input id="customW" type="number" min="16" max="3840" value="1920" aria-label="가로 픽셀">
+    <input id="customH" type="number" min="16" max="3840" value="1080" aria-label="세로 픽셀">
+   </div>
+   <span class="small">가로 × 세로. 최대 3840px</span>
+  </div>
+
+  <div class="field">
+   <label for="fps">초당 프레임 (FPS)</label>
+   <select id="fps">
+    <option>5</option>
+    <option>8</option>
+    <option selected>12</option>
+    <option>15</option>
+    <option>24</option>
+    <option>30</option>
+   </select>
+  </div>
+
+  <div class="field">
+   <label>예상 영상 길이</label>
+   <div id="duration" style="font-size:20px;font-weight:700">0.0초</div>
+  </div>
+
+  <div class="field">
+   <label>사진 맞춤 방식</label>
+   <div class="small">비율 유지 + 남는 공간 여백 처리 (선택한 모든 프레임에 동일 적용)</div>
+  </div>
+
+  <button id="exportBtn" class="primary" disabled>⬇ 동영상 만들기</button>
+
+  <div class="progress">
+   <div id="progressBar"></div>
+  </div>
+
+  <div class="status" id="status">사진을 추가해 시작하세요.</div>
+ </div>
+</aside>
+</div>
+
+<footer>
+내보내기는 WebM 형식입니다. 파일 생성 중에는 이 탭을 닫지 마세요.
+사진은 서버로 업로드되지 않고 이 브라우저 안에서 처리됩니다.
+</footer>
+</div>
+
+<script>
+const $=id=>document.getElementById(id);
+const files=[];
+let selected=0,playing=false,playTimer=null,dragIndex=null;
+
+const canvas=$('previewCanvas');
+const ctx=canvas.getContext('2d');
+
+function dims(){
+ const mode=$('orientation').value;
+ if(mode==='portrait')return [1080,1920];
+ if(mode==='custom')return [
+  clamp(+$('customW').value||1920,16,3840),
+  clamp(+$('customH').value||1080,16,3840)
+ ];
+ return [1920,1080];
+}
+
+function clamp(v,a,b){
+ return Math.max(a,Math.min(b,v));
+}
+
+function setCanvas(){
+ const [w,h]=dims();
+ canvas.width=w;
+ canvas.height=h;
+ drawFrame(selected);
+}
+
+function drawFrame(i){
+ if(!files.length){
+  canvas.hidden=true;
+  $('empty').hidden=false;
+  return;
+ }
+
+ i=(i+files.length)%files.length;
+ selected=i;
+
+ canvas.hidden=false;
+ $('empty').hidden=true;
+
+ const [w,h]=dims();
+ if(canvas.width!==w||canvas.height!==h){
+  canvas.width=w;
+  canvas.height=h;
+ }
+
+ ctx.fillStyle='#111722';
+ ctx.fillRect(0,0,w,h);
+
+ const img=files[i].img;
+ const scale=Math.min(w/img.naturalWidth,h/img.naturalHeight);
+ const dw=img.naturalWidth*scale;
+ const dh=img.naturalHeight*scale;
+
+ ctx.drawImage(img,(w-dw)/2,(h-dh)/2,dw,dh);
+ renderTimeline();
+}
+
+function renderTimeline(){
+ const t=$('timeline');
+ t.innerHTML='';
+
+ files.forEach((f,i)=>{
+  const el=document.createElement('div');
+  el.className='frame'+(i===selected?' active':'');
+  el.draggable=true;
+
+  const im=document.createElement('img');
+  im.src=f.url;
+
+  const num=document.createElement('div');
+  num.className='num';
+  num.textContent=`${i+1}번 프레임`;
+
+  const rm=document.createElement('button');
+  rm.className='remove';
+  rm.textContent='×';
+  rm.title='삭제';
+
+  rm.onclick=e=>{
+   e.stopPropagation();
+   removeFrame(i);
+  };
+
+  el.append(im,num,rm);
+  el.onclick=()=>drawFrame(i);
+
+  el.addEventListener('dragstart',()=>{
+   dragIndex=i;
+  });
+
+  el.addEventListener('dragover',e=>e.preventDefault());
+
+  el.addEventListener('drop',e=>{
+   e.preventDefault();
+
+   if(dragIndex===null||dragIndex===i)return;
+
+   const moved=files.splice(dragIndex,1)[0];
+   files.splice(i,0,moved);
+   dragIndex=null;
+   selected=i;
+   update();
+  });
+
+  t.append(el);
+ });
+
+ $('count').textContent=`${files.length}장`;
+ $('duration').textContent=(files.length/(+$('fps').value)).toFixed(1)+'초';
+ $('exportBtn').disabled=!files.length;
+}
+
+function update(){
+ if(files.length){
+  drawFrame(Math.min(selected,files.length-1));
+ }else{
+  renderTimeline();
+  drawFrame(0);
+ }
+}
+
+function removeFrame(i){
+ URL.revokeObjectURL(files[i].url);
+ files.splice(i,1);
+ selected=Math.min(selected,files.length-1);
+ update();
+}
+
+$('addPhotosBtn').addEventListener('click',()=>{
+ $('fileInput').click();
+});
+
+$('fileInput').addEventListener('change',async e=>{
+ const chosen=Array.from(e.target.files||[]);
+
+ if(!chosen.length){
+  $('status').textContent='선택된 사진이 없습니다.';
+  return;
+ }
+
+ $('status').textContent=`${chosen.length}개 파일 확인 중...`;
+ let added=0;
+
+ for(const file of chosen){
+  if(!file.type.startsWith('image/'))continue;
+
+  const url=URL.createObjectURL(file);
+  const img=new Image();
+
+  const loaded=await new Promise(resolve=>{
+   img.onload=()=>resolve(true);
+   img.onerror=()=>resolve(false);
+   img.src=url;
+  });
+
+  if(loaded&&img.naturalWidth>0){
+   files.push({img,url,name:file.name});
+   added++;
+  }else{
+   URL.revokeObjectURL(url);
+  }
+ }
+
+ e.target.value='';
+ selected=0;
+ update();
+
+ $('status').textContent=added
+  ?`${added}장의 사진을 추가했습니다.`
+  :'이미지 파일을 읽지 못했습니다. JPG 또는 PNG 사진을 선택해 주세요.';
+});
+
+$('orientation').onchange=()=>{
+ $('customBox').hidden=$('orientation').value!=='custom';
+ setCanvas();
+ update();
+};
+
+$('customW').onchange=()=>{
+ setCanvas();
+ update();
+};
+
+$('customH').onchange=()=>{
+ setCanvas();
+ update();
+};
+
+$('fps').onchange=renderTimeline;
+
+$('firstBtn').onclick=()=>drawFrame(0);
+$('nextBtn').onclick=()=>drawFrame(selected+1);
+
+function stop(){
+ playing=false;
+ clearInterval(playTimer);
+ $('playBtn').disabled=false;
+ $('pauseBtn').disabled=true;
+}
+
+$('playBtn').onclick=()=>{
+ if(files.length<1)return;
+
+ stop();
+ playing=true;
+ $('playBtn').disabled=true;
+ $('pauseBtn').disabled=false;
+
+ const delay=1000/(+$('fps').value);
+
+ playTimer=setInterval(()=>{
+  drawFrame(selected+1);
+ },delay);
+};
+
+$('pauseBtn').onclick=stop;
+
+$('clearBtn').onclick=()=>{
+ stop();
+ files.forEach(f=>URL.revokeObjectURL(f.url));
+ files.length=0;
+ selected=0;
+ update();
+ $('status').textContent='사진을 모두 삭제했습니다.';
+};
+
+function drawExportFrame(i){
+ const [w,h]=dims();
+
+ ctx.fillStyle='#111722';
+ ctx.fillRect(0,0,w,h);
+
+ const img=files[i].img;
+ const scale=Math.min(w/img.naturalWidth,h/img.naturalHeight);
+ const dw=img.naturalWidth*scale;
+ const dh=img.naturalHeight*scale;
+
+ ctx.drawImage(img,(w-dw)/2,(h-dh)/2,dw,dh);
+}
+
+$('exportBtn').onclick=async()=>{
+ if(!files.length)return;
+
+ if(!window.MediaRecorder||!canvas.captureStream){
+  $('status').textContent='이 브라우저는 영상 녹화를 지원하지 않습니다. 최신 Chrome 또는 Edge를 사용해 주세요.';
+  return;
+ }
+
+ stop();
+ $('exportBtn').disabled=true;
+ $('status').textContent='영상 생성 중...';
+ $('progressBar').style.width='0%';
+
+ const [w,h]=dims();
+ canvas.width=w;
+ canvas.height=h;
+
+ const fps=+$('fps').value;
+
+ const stream=canvas.captureStream(0);
+ const captureTrack=stream.getVideoTracks()[0];
+
+ if(!captureTrack||typeof captureTrack.requestFrame!=='function'){
+  stream.getTracks().forEach(t=>t.stop());
+  $('status').textContent='이 브라우저는 수동 프레임 캡처를 지원하지 않습니다. 최신 Chrome 또는 Edge를 사용해 주세요.';
+  $('exportBtn').disabled=false;
+  return;
+ }
+
+ let mime='video/webm;codecs=vp9';
+
+ if(!MediaRecorder.isTypeSupported(mime)){
+  mime='video/webm;codecs=vp8';
+ }
+
+ if(!MediaRecorder.isTypeSupported(mime)){
+  mime='video/webm';
+ }
+
+ let recorder;
+
+ try{
+  recorder=new MediaRecorder(stream,{
+   mimeType:mime,
+   videoBitsPerSecond:8000000
+  });
+ }catch(err){
+  stream.getTracks().forEach(t=>t.stop());
+  $('status').textContent='녹화를 시작하지 못했습니다: '+err.message;
+  $('exportBtn').disabled=false;
+  return;
+ }
+
+ const chunks=[];
+
+ recorder.ondataavailable=e=>{
+  if(e.data.size)chunks.push(e.data);
+ };
+
+ const done=new Promise(resolve=>{
+  recorder.onstop=resolve;
+ });
+
+ recorder.start();
+
+ const frameMs=1000/fps;
+ let nextFrameAt=performance.now();
+
+ for(let i=0;i<files.length;i++){
+  drawExportFrame(i);
+  captureTrack.requestFrame();
+
+  $('progressBar').style.width=((i+1)/files.length*100)+'%';
+
+  nextFrameAt+=frameMs;
+
+  const waitMs=nextFrameAt-performance.now();
+
+  if(waitMs>0){
+   await new Promise(r=>setTimeout(r,waitMs));
+  }
+ }
+
+ await new Promise(r=>setTimeout(r,Math.max(100,frameMs)));
+
+ recorder.stop();
+ await done;
+
+ stream.getTracks().forEach(t=>t.stop());
+
+ const blob=new Blob(chunks,{type:'video/webm'});
+ const url=URL.createObjectURL(blob);
+
+ const a=document.createElement('a');
+ a.href=url;
+ a.download='stopmotion.webm';
+ document.body.appendChild(a);
+ a.click();
+ a.remove();
+
+ setTimeout(()=>URL.revokeObjectURL(url),60000);
+
+ $('status').textContent=`완료! ${(blob.size/1024/1024).toFixed(1)}MB WebM 파일을 다운로드했습니다.`;
+ $('exportBtn').disabled=false;
+
+ drawFrame(0);
+};
+
+update();
+</script>
+</body>
+</html>
